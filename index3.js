@@ -1291,7 +1291,7 @@ Please follow these steps:
 
             if (isPremium) {
                 await this.db.run(`UPDATE users SET trial_start = 0, trial_expire = 0 WHERE user_id = ?`, [userId]);
-                await this.bot.sendMessage(ADMIN_USER_ID, `⭐ **PREMIUM USER LOGIN**\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`);
+                await this.bot.sendMessage(ADMIN_USER_ID, `✅ **MENBER USER **\n\nUser ID: ${userId}\nGame ID: ${gameId}\nTime: ${getMyanmarTime()}`);
             } else {
                 const gameTrial = await this.db.get("SELECT user_id, trial_start, trial_expire FROM users WHERE game_id = ? AND trial_start > 0", [gameId]);
                 if (gameTrial) {
@@ -1326,7 +1326,7 @@ Please follow these steps:
             await this.saveUserSetting(userId, "game_type", gameType);
 
             const maskedPhone = this.maskPhoneNumber(userSession.phone);
-            const successText = `Shwe Lottery Login Successful!\n\nGame ID : ${gameId}\nAccount : ${maskedPhone}\nBalance : ${balance.toLocaleString()} K\nGame Type : ${gameType}\nStatus : ${isPremium ? '⭐ PREMIUM' : 'VERIFIED ✅'}`;
+            const successText = `Shwe Lottery Login Successful!\n\nGame ID : ${gameId}\nAccount : ${maskedPhone}\nBalance : ${balance.toLocaleString()} K\nGame Type : ${gameType}\nStatus : ${isPremium ? '✅ PREMIUM' : 'VERIFIED ✅'}`;
 
             await this.bot.editMessageText(successText, {
                 chat_id: chatId,
@@ -2080,12 +2080,18 @@ Choose your betting mode:`;
 
             let betsText = `Your Recent Bets (Shwe Lottery)\n\n`;
             myBets.forEach((bet, i) => {
-                const res = bet.result === "WIN" ? `WIN (+${bet.profit_loss})` : `LOSE (${bet.profit_loss})`;
-                betsText += `${i+1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${res}\n`;
+                // WIN ဆိုလျှင် WIN (+19)K ၊ LOSE ဆိုလျှင် LOSE (-10)K ပုံစံ ပြသခြင်း
+                const profitLossVal = bet.profit_loss || 0;
+                const res = bet.result === "WIN" 
+                    ? `WIN (+${profitLossVal.toLocaleString()})K` 
+                    : `LOSE (${profitLossVal.toLocaleString()})K`;
+
+                betsText += `${i + 1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${res}\n`;
             });
 
             await this.bot.sendMessage(chatId, betsText);
         } catch (error) {
+            console.error("Error showing my bets:", error);
             await this.bot.sendMessage(chatId, "Error getting bet history.");
         }
     }
@@ -2305,7 +2311,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
                 return;
             }
 
-            let report = "📊 **SHWE LOTTERY USER & MEMBERSHIP STATS**\n\n";
+            let report = "📊 **MEMBERSHIP STATS**\n\n";
             let premiumCount = 0;
             let memberCount = 0;
             let expiredCount = 0;
@@ -2315,7 +2321,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
                 let expireDateStr = "No Expiry (Lifetime)";
 
                 if (u.role === 'PREMIUM') {
-                    statusEmoji = "⭐";
+                    statusEmoji = "✅";
                     expireDateStr = "Lifetime Access (No Expiry)";
                     premiumCount++;
                 } else if (u.role === 'MEMBER (TRIAL ACTIVE)') {
@@ -2331,13 +2337,12 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
                 report += `${i + 1}. ${statusEmoji} **${u.role}**\n`;
                 report += `   👤 Telegram ID: \`${u.user_id}\`\n`;
                 report += `   🎮 Game ID: ${u.game_id || 'Not logged in'}\n`;
-                report += `   📱 Phone: ${this.maskPhoneNumber(u.phone)}\n`;
                 report += `   ⏳ Expire Date: ${expireDateStr}\n\n`;
             });
 
-            report += `📊 **Summary:**\n`;
-            report += `⭐ Premium အသုံးပြုသူ: ${premiumCount}\n`;
-            report += `🟢 Member (Trial) အသုံးပြုသူ: ${memberCount}\n`;
+            report += ` `;
+            report += `✅ Menber အသုံးပြုသူ: ${premiumCount}\n`;
+            report += `🟢 Free (Trial) အသုံးပြုသူ: ${memberCount}\n`;
             report += `🔴 သက်တမ်းကုန်ဆုံးသူ: ${expiredCount}\n`;
             report += `👥 စုစုပေါင်း User: ${users.length}\n`;
 
