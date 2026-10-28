@@ -1,4 +1,3 @@
-
 const TelegramBot = require('node-telegram-bot-api');
 const sqlite3 = require('sqlite3').verbose();
 const axios = require('axios');
@@ -934,7 +933,6 @@ class AutoLotteryBot {
         }
     }
 
-    // ✅ /start နှိပ်လိုက်သည်နှင့် User ကို Database သို့ သိမ်းဆည်းခြင်း (Broadcast စာပို့နိုင်ရန်)
     async handleStart(msg) {
         const chatId = msg.chat.id;
         const userId = String(chatId);
@@ -2411,5 +2409,3 @@ process.on('SIGINT', () => {
     console.log('Bot shutting down...');
     process.exit();
 });
-
-```
