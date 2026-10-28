@@ -36,8 +36,8 @@ const waitingForResults = {};
 const processedIssues = {};
 
 // MYANMAR TIME FUNCTION
-const getMyanmarTime = () => {
-    const now = new Date();
+const getMyanmarTime = (timestamp = null) => {
+    const now = timestamp ? new Date(timestamp) : new Date();
     const myanmarOffset = 6.5 * 60 * 60 * 1000;
     const myanmarTime = new Date(now.getTime() + myanmarOffset);
 
@@ -58,23 +58,22 @@ class Database {
     }
 
     initDatabase() {
-        // ✅ Crease mode default ကို 'loss' သို့ ပြောင်းထားပါသည်
         const tables = [
             `CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
-                phone TEXT,
-                password TEXT,
+                phone TEXT DEFAULT '',
+                password TEXT DEFAULT '',
                 platform TEXT DEFAULT 'SHWE',
-                game_id TEXT,
+                game_id TEXT DEFAULT '',
                 trial_start INTEGER DEFAULT 0,
                 trial_expire INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
             `CREATE TABLE IF NOT EXISTS user_settings (
                 user_id INTEGER PRIMARY KEY,
-                bet_amount INTEGER DEFAULT 100,
+                bet_amount INTEGER DEFAULT 10,
                 auto_login BOOLEAN DEFAULT 1,
-                bet_sequence TEXT DEFAULT '100,300,700,1600,3200,7600,16000,32000',
+                bet_sequence TEXT DEFAULT '10,30,70,160,320,760,1600,3200',
                 current_bet_index INTEGER DEFAULT 0,
                 platform TEXT DEFAULT 'SHWE',
                 auto_betting BOOLEAN DEFAULT 0,
@@ -251,14 +250,10 @@ class LotteryAPI {
             };
 
             body.signature = this.signMd5(body);
-            console.log('Login Request Body:', JSON.stringify(body, null, 2));
-
             const response = await axios.post(`${this.baseUrl}Login`, body, {
                 headers: this.headers,
                 timeout: 30000
             });
-
-            console.log('Login Response:', JSON.stringify(response.data, null, 2));
 
             if (response.status === 200) {
                 const result = response.data;
@@ -282,7 +277,6 @@ class LotteryAPI {
                 };
             }
         } catch (error) {
-            console.error('Login error details:', error);
             return { 
                 success: false, 
                 message: `Login error: ${error.message}`, 
@@ -313,7 +307,6 @@ class LotteryAPI {
             }
             return {};
         } catch (error) {
-            console.error('Error getting user info:', error.message);
             return {};
         }
     }
@@ -340,7 +333,6 @@ class LotteryAPI {
             }
             return 0;
         } catch (error) {
-            console.error('Error getting balance:', error.message);
             return 0;
         }
     }
@@ -369,14 +361,10 @@ class LotteryAPI {
             };
             body.signature = this.signMd5(body);
 
-            console.log(`GETTING CURRENT ISSUE FOR - ${this.gameType}, TYPEID: ${typeId}`);
-
             const response = await axios.post(`${this.baseUrl}${endpoint}`, body, {
                 headers: this.headers,
                 timeout: 10000
             });
-
-            console.log(`ISSUE RESPONSE FOR ${this.gameType}:`, JSON.stringify(response.data));
 
             if (response.status === 200) {
                 const result = response.data;
@@ -415,32 +403,20 @@ class LotteryAPI {
                             }
                         }
                     }
-
-                    console.log(`CURRENT ISSUE FOR ${this.gameType}: ${issueNumber}`);
                     return issueNumber;
-                } else {
-                    console.log(`ERROR GETTING ISSUE FOR ${this.gameType}:`, result.msg);
-                    return "";
                 }
-            } else {
-                console.log(`HTTP ERROR FOR ${this.gameType}:`, response.status);
-                return "";
             }
+            return "";
         } catch (error) {
-            console.error(`ERROR GETTING CURRENT ISSUE FOR ${this.gameType}:`, error.message);
             return "";
         }
     }
 
     async placeBet(amount, betType) {
         try {
-            console.log(`ATTEMPTING TO PLACE BET - GAME: ${this.gameType}, AMOUNT: ${amount}, BETTYPE: ${betType}`);
-
-            // အနည်းဆုံး 10ks သို့ ပြောင်းထားပါသည်
             if (amount < 10) {
                 amount = 10;
             }
-           
 
             let issueId = "";
             let retryCount = 0;
@@ -475,28 +451,8 @@ class LotteryAPI {
                 const actualAmount = baseAmount * betCount;
                 amount = actualAmount;
 
-                let selectType;
-                let gameTypeForTrx;
-                
-                if (betType === 13) {
-                    selectType = 13;
-                    gameTypeForTrx = 2;
-                } else if (betType === 14) {
-                    selectType = 14;
-                    gameTypeForTrx = 2;
-                } else if (betType === 10) {
-                    selectType = 10;
-                    gameTypeForTrx = 0;
-                } else if (betType === 11) {
-                    selectType = 11;
-                    gameTypeForTrx = 0;
-                } else if (betType === 12) {
-                    selectType = 12;
-                    gameTypeForTrx = 0;
-                } else {
-                    selectType = 13;
-                    gameTypeForTrx = 2;
-                }
+                let selectType = betType;
+                let gameTypeForTrx = [13, 14].includes(betType) ? 2 : 0;
 
                 requestBody = {
                     "typeId": 13,
@@ -512,7 +468,7 @@ class LotteryAPI {
 
                 endpoint = 'GameTRXBetting';
             } else {
-                baseAmount = amount >= 10000 ? 1000 : 100;
+                baseAmount = amount >= 10000 ? 1000 : (amount >= 100 ? 100 : 10);
                 betCount = Math.floor(amount / baseAmount);
                 if (betCount < 1) betCount = 1;
 
@@ -576,7 +532,6 @@ class LotteryAPI {
                 };
             }
         } catch (error) {
-            console.log('BETTING ERROR:', error.message);
             return { 
                 success: false, 
                 message: `Betting error: ${error.message}`, 
@@ -666,7 +621,6 @@ class LotteryAPI {
                 return [];
             }
         } catch (error) {
-            console.error('Error getting recent results:', error.message);
             return [];
         }
     }
@@ -697,7 +651,6 @@ class AutoLotteryBot {
         this.bot.onText(/\/ids/, (msg) => this.handleListGameIds(msg));
         this.bot.onText(/\/gats/, (msg) => this.handleGameIdStats(msg));
         this.bot.onText(/\/broadcast (.+)/, (msg, match) => this.handleBroadcastMessage(msg, match));
-        this.bot.onText(/\/msg (.+)/, (msg, match) => this.handleBroadcastActive(msg, match));
 
         this.bot.on('callback_query', (query) => this.handleCallbackQuery(query));
 
@@ -863,7 +816,6 @@ class AutoLotteryBot {
 
             return { betType, betTypeStr: fullBetTypeStr };
         } catch (error) {
-            console.error(`Error getting Colour formula bet type:`, error);
             const betType = Math.random() < 0.5 ? 13 : 14;
             return { betType, betTypeStr: betType === 13 ? "BIG" : "SMALL" };
         }
@@ -883,17 +835,10 @@ class AutoLotteryBot {
 
     async showCreaseModeMenu(chatId, userId) {
         try {
-            // Default ကို 'loss' အဖြစ် သတ်မှတ်ထားပါသည်
-            const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
-            const statusText = creaseMode === 'win' ? "Win Crease" : "Loss Crease";
-            
-            const menuText = `Choose Select Crease:`;
-            
-            await this.bot.sendMessage(chatId, menuText, {
+            await this.bot.sendMessage(chatId, `Choose Select Crease:`, {
                 reply_markup: this.getCreaseModeKeyboard()
             });
         } catch (error) {
-            console.error(`Error showing crease mode menu:`, error);
             await this.bot.sendMessage(chatId, "Error loading crease mode menu. Please try again.");
         }
     }
@@ -910,7 +855,6 @@ class AutoLotteryBot {
                 reply_markup: this.getMainKeyboard(userId)
             });
         } catch (error) {
-            console.error(`Error setting crease mode:`, error);
             await this.bot.sendMessage(chatId, "Error setting crease mode. Please try again.");
         }
     }
@@ -922,7 +866,7 @@ class AutoLotteryBot {
                 await this.clearFormulaPatterns(userId);
             }
             const statusText = enabled ? "✅ Enabled" : "❌ Disabled";
-            const message = `Follow Inverse Mode: ${statusText}\n\n${enabled ? ' ' : ' '}`;
+            const message = `Follow Inverse Mode: ${statusText}\n\n${enabled ? 'Bot will bet the opposite of the last result' : 'Follow Inverse is disabled'}`;
             await this.bot.sendMessage(chatId, message);
         } catch (error) {
             await this.bot.sendMessage(chatId, "Error setting follow inverse mode. Please try again.");
@@ -990,10 +934,22 @@ class AutoLotteryBot {
         }
     }
 
+    // ✅ /start နှိပ်လိုက်သည်နှင့် User ကို Database သို့ သိမ်းဆည်းခြင်း (Broadcast စာပို့နိုင်ရန်)
     async handleStart(msg) {
         const chatId = msg.chat.id;
         const userId = String(chatId);
         this.ensureUserSession(userId);
+
+        try {
+            await this.db.run(
+                `INSERT INTO users (user_id, platform) VALUES (?, 'SHWE')
+                 ON CONFLICT(user_id) DO NOTHING`,
+                [userId]
+            );
+        } catch (e) {
+            console.error("Error saving user on /start:", e.message);
+        }
+
         const welcomeText = `Welcome ${msg.from.first_name} to Shwe Lottery Auto Bot!`;
 
         await this.bot.sendMessage(chatId, welcomeText, {
@@ -1173,8 +1129,8 @@ class AutoLotteryBot {
                     break;
                 case "Set Bet Sequence":
                     userSession.step = 'set_bet_sequence';
-                    const currentSequence = await this.getUserSetting(userId, 'bet_sequence', '');
-                    await this.bot.sendMessage(chatId, `Current bet sequence: ${currentSequence}\nEnter new bet sequence (comma separated e.g., 100,300,700):`);
+                    const currentSequence = await this.getUserSetting(userId, 'bet_sequence', '10,30,70,160,320,760,1600,3200');
+                    await this.bot.sendMessage(chatId, `Current bet sequence: ${currentSequence}\nEnter new bet sequence (comma separated, min 10ks e.g., 10,30,70):`);
                     break;
                 case "Profit Target":
                     userSession.step = 'set_profit_target';
@@ -1226,7 +1182,6 @@ class AutoLotteryBot {
                     });
             }
         } catch (error) {
-            console.error(`Error handling button command:`, error);
             await this.bot.sendMessage(chatId, "Error processing command. Please try again.");
         }
     }
@@ -1660,7 +1615,6 @@ Please follow these steps:
             waitingForResults[userId] = false;
             await this.sendResultMessage(userId, issue, betTypeStr, amount, betResult, actualProfit, resultNumber, resultType, resultColour, newTotalProfit);
         } catch (error) {
-            console.error(`Error checking result:`, error);
             waitingForResults[userId] = false;
         }
     }
@@ -1669,8 +1623,8 @@ Please follow these steps:
         try {
             const chatId = userId;
             let message = betResult === "WIN" ? 
-                `🚀 BET RESULT - WIN! 🎉\n\n🏆 PROFIT: +${profitLoss.toLocaleString()} K\n🏆 TOTAL PROFIT: ${totalProfit.toLocaleString()} K` :
-                `🚀 BET RESULT - LOSS! 💔\n\nLOSS: -${amount.toLocaleString()} K\nTOTAL PROFIT: ${totalProfit.toLocaleString()} K`;
+                `🚀 BET RESULT - WIN! \n\n🏆TOTAL PROFIT: ${totalProfit.toLocaleString()} K` :
+                `🚀 BET RESULT - LOSS!\n\nTOTAL PROFIT: ${totalProfit.toLocaleString()} K`;
 
             await this.bot.sendMessage(chatId, message);
         } catch (error) {
@@ -1680,18 +1634,15 @@ Please follow these steps:
 
     async updateBetSequence(userId, result) {
         try {
-            // Default ကို 'loss' (Loss Crease) ဖြင့်သာ အသုံးပြုပါသည်
             const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '10,30,70,160,320,760,1600,3200');
             const amounts = betSequence.split(',').map(x => parseInt(x.trim()));
 
             let newIndex = 0;
             if (creaseMode === 'win') {
-                // Win Crease: Win ရင် တိုး၊ Lose ရင် step 1
                 newIndex = result === "WIN" ? currentIndex + 1 : 0;
             } else {
-                // Loss Crease (Default): Lose ရင် step တိုး၊ Win ရင် step 1 ပြန်စ
                 newIndex = result === "LOSE" ? currentIndex + 1 : 0;
             }
 
@@ -1751,7 +1702,7 @@ Please follow these steps:
         const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
         const creaseModeText = creaseMode === 'win' ? 'Win Crease' : 'Loss Crease';
 
-        await this.bot.sendMessage(chatId, `🚀 Shwe Lottery Auto Bot Started!\nGame Type: ${userSession.gameType}\nCrease Mode: ${creaseModeText}`);
+        await this.bot.sendMessage(chatId, `🚀 Auto Bot Started!\nGame Type: ${userSession.gameType}\nCrease Mode: ${creaseModeText}`);
         this.startAutoBetting(userId);
     }
 
@@ -1919,7 +1870,6 @@ Please follow these steps:
     async getUserSetting(userId, key, defaultValue = null) {
         try {
             const result = await this.db.get(`SELECT ${key} FROM user_settings WHERE user_id = ?`, [userId]);
-            // crease_mode အတွက် 'none' ဖြစ်နေပါကလည်း 'loss' သို့ ပြောင်းပေးပါသည်
             if (key === 'crease_mode' && (!result || !result[key] || result[key] === 'none')) {
                 return 'loss';
             }
@@ -2026,7 +1976,7 @@ Please follow these steps:
         try {
             const userSession = this.ensureUserSession(userId);
             const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '10,30,70,160,320,760,1600,3200');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
             const followInverse = await this.getUserSetting(userId, 'follow_inverse', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
@@ -2039,7 +1989,6 @@ Please follow these steps:
             const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
             const botSession = await this.getBotSession(userId);
 
-            // Crease mode
             const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const creaseModeText = creaseMode === 'win' ? "Win Crease" : "Loss Crease";
 
@@ -2101,6 +2050,7 @@ Please follow these steps:
             });
 
             const settingsText = `•Bot Settings:
+Platform: Shwe Lottery
 Betting Mode: ${modeText}
 Crease Mode: ${creaseModeText}
 Bet Sequence: ${formattedSequence}
@@ -2118,7 +2068,6 @@ Choose your betting mode:`;
                 reply_markup: this.getBotSettingsKeyboard()
             });
         } catch (error) {
-            console.error(`Error showing bot settings:`, error);
             await this.bot.sendMessage(chatId, "Error loading bot settings. Please try again.");
         }
     }
@@ -2143,7 +2092,6 @@ Choose your betting mode:`;
         }
     }
 
-    // ✅ Bot Info တွင် Shwe Lottery နှင့် Default Loss Crease ကို သေချာဖော်ပြထားပါသည်
     async showBotInfo(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
 
@@ -2154,9 +2102,7 @@ Choose your betting mode:`;
                 try {
                     balance = await userSession.apiInstance.getBalance();
                     userInfo = await userSession.apiInstance.getUserInfo();
-                } catch (e) {
-                    console.error("Error fetching balance/userInfo:", e.message);
-                }
+                } catch (e) {}
             }
 
             const user_id_display = userInfo.userId || 'N/A';
@@ -2164,7 +2110,7 @@ Choose your betting mode:`;
             const gameType = userSession.gameType || 'WINGO_30S';
 
             const botSession = await this.getBotSession(userId);
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '10,30,70,160,320,760,1600,3200');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
 
@@ -2175,14 +2121,10 @@ Choose your betting mode:`;
             const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
             const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
             
-            // Crease Mode: default အားဖြင့် 'loss' (Loss Crease)
             const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const creaseModeText = creaseMode === 'win' ? 'Win Crease' : 'Loss Crease';
-            
-            // Follow Inverse Mode
             const followInverse = await this.getUserSetting(userId, 'follow_inverse', 0);
 
-            // Betting Mode စာသား သတ်မှတ်ခြင်း
             let modeText = "";
             if (followInverse) {
                 modeText = "Follow Inverse";
@@ -2200,7 +2142,7 @@ Choose your betting mode:`;
                 }[randomMode] || "Random Bot";
             }
 
-            const botInfoText = `
+            const botInfoText = `BOT INFORMATION
 
 • User Information:
 Platform: Shwe Lottery
@@ -2220,11 +2162,9 @@ Bot Status: ${botSession.is_running ? 'RUNNING 🟢' : 'STOPPED 🔴'}
 Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
 Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}`;
 
-            // parse_mode ကြောင့် error မတက်စေရန် parse_mode မပါဘဲ ပို့ပါသည်
             await this.bot.sendMessage(chatId, botInfoText);
 
         } catch (error) {
-            console.error("Error in showBotInfo:", error);
             await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
         }
     }
@@ -2264,10 +2204,9 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
     }
 
     async handleSetBetSequence(chatId, userId, text) {
-        // အနည်းဆုံး 10ks သတ်မှတ်ထားပါသည်
         const amounts = text.trim().split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x) && x >= 10);
         if (amounts.length === 0) {
-            await this.bot.sendMessage(chatId, "Invalid sequence! Enter numbers >= 10 separated by comma.\nဥပမာ - 10,30,70,150");
+            await this.bot.sendMessage(chatId, "Invalid sequence! Enter numbers >= 10 separated by comma.\nဥပမာ - 10,30,70,160");
             return;
         }
 
@@ -2339,35 +2278,125 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
         await this.bot.sendMessage(chatId, `Allowed Game IDs:\n\n${list || 'None'}`);
     }
 
+    // ✅ /gats command: Premium နှင့် Member/Trial သမားများ၊ သက်တမ်းကုန်မည့် Date & Time ပြသပေးခြင်း
     async handleGameIdStats(msg) {
         const chatId = msg.chat.id;
         if (String(chatId) !== ADMIN_USER_ID) return;
-        const total = await this.db.get('SELECT COUNT(*) as count FROM allowed_game_ids');
-        await this.bot.sendMessage(chatId, `Total Premium IDs: ${total.count || 0}`);
+
+        try {
+            const users = await this.db.all(`
+                SELECT 
+                    u.user_id,
+                    u.phone,
+                    u.game_id,
+                    u.trial_start,
+                    u.trial_expire,
+                    CASE 
+                        WHEN a.game_id IS NOT NULL THEN 'PREMIUM'
+                        WHEN u.trial_start > 0 AND u.trial_expire > strftime('%s', 'now') * 1000 THEN 'MEMBER (TRIAL ACTIVE)'
+                        WHEN u.trial_start > 0 AND u.trial_expire <= strftime('%s', 'now') * 1000 THEN 'EXPIRED'
+                        ELSE 'REGISTERED'
+                    END as role
+                FROM users u
+                LEFT JOIN allowed_game_ids a ON u.game_id = a.game_id
+                ORDER BY u.created_at DESC
+            `);
+
+            if (!users || users.length === 0) {
+                await this.bot.sendMessage(chatId, "အသုံးပြုသူ စာရင်း မရှိသေးပါ။");
+                return;
+            }
+
+            let report = "📊 **SHWE LOTTERY USER & MEMBERSHIP STATS**\n\n";
+            let premiumCount = 0;
+            let memberCount = 0;
+            let expiredCount = 0;
+
+            users.forEach((u, i) => {
+                let statusEmoji = "⚪";
+                let expireDateStr = "No Expiry (Lifetime)";
+
+                if (u.role === 'PREMIUM') {
+                    statusEmoji = "⭐";
+                    expireDateStr = "Lifetime Access (No Expiry)";
+                    premiumCount++;
+                } else if (u.role === 'MEMBER (TRIAL ACTIVE)') {
+                    statusEmoji = "🟢";
+                    expireDateStr = getMyanmarTime(u.trial_expire);
+                    memberCount++;
+                } else if (u.role === 'EXPIRED') {
+                    statusEmoji = "🔴";
+                    expireDateStr = `Expired at: ${getMyanmarTime(u.trial_expire)}`;
+                    expiredCount++;
+                }
+
+                report += `${i + 1}. ${statusEmoji} **${u.role}**\n`;
+                report += `   👤 Telegram ID: \`${u.user_id}\`\n`;
+                report += `   🎮 Game ID: ${u.game_id || 'Not logged in'}\n`;
+                report += `   📱 Phone: ${this.maskPhoneNumber(u.phone)}\n`;
+                report += `   ⏳ Expire Date: ${expireDateStr}\n\n`;
+            });
+
+            report += `📊 **Summary:**\n`;
+            report += `⭐ Premium အသုံးပြုသူ: ${premiumCount}\n`;
+            report += `🟢 Member (Trial) အသုံးပြုသူ: ${memberCount}\n`;
+            report += `🔴 သက်တမ်းကုန်ဆုံးသူ: ${expiredCount}\n`;
+            report += `👥 စုစုပေါင်း User: ${users.length}\n`;
+
+            if (report.length > 4000) {
+                const parts = report.match(/[\s\S]{1,4000}/g) || [];
+                for (const part of parts) {
+                    await this.bot.sendMessage(chatId, part, { parse_mode: 'Markdown' });
+                }
+            } else {
+                await this.bot.sendMessage(chatId, report, { parse_mode: 'Markdown' });
+            }
+        } catch (error) {
+            console.error("Error in handleGameIdStats:", error);
+            await this.bot.sendMessage(chatId, "Error loading statistics.");
+        }
     }
 
+    // ✅ /broadcast command: /start နှိပ်ထားသော User အားလုံးထံ စာပို့ခြင်း
     async handleBroadcastMessage(msg, match) {
         const chatId = msg.chat.id;
         if (String(chatId) !== ADMIN_USER_ID) return;
-        const users = await this.db.all('SELECT user_id FROM users');
-        for (const user of users) {
-            try {
-                await this.bot.sendMessage(user.user_id, `📢 Broadcast:\n\n${match[1]}`);
-            } catch (e) {}
-        }
-        await this.bot.sendMessage(chatId, "Broadcast completed.");
-    }
 
-    async handleBroadcastActive(msg, match) {
-        const chatId = msg.chat.id;
-        if (String(chatId) !== ADMIN_USER_ID) return;
-        const users = await this.db.all('SELECT user_id FROM bot_sessions WHERE is_running = 1');
-        for (const user of users) {
-            try {
-                await this.bot.sendMessage(user.user_id, `📢 ${match[1]}`);
-            } catch (e) {}
+        const broadcastText = match[1];
+        if (!broadcastText) {
+            await this.bot.sendMessage(chatId, "အသုံးပြုပုံ - /broadcast <ပို့လိုသောစာသား>");
+            return;
         }
-        await this.bot.sendMessage(chatId, "Active broadcast completed.");
+
+        try {
+            const users = await this.db.all('SELECT user_id FROM users');
+            if (!users || users.length === 0) {
+                await this.bot.sendMessage(chatId, "စာပို့ရန် User မရှိသေးပါ။");
+                return;
+            }
+
+            let sentCount = 0;
+            let failCount = 0;
+
+            const notifyMsg = await this.bot.sendMessage(chatId, `📢 User ${users.length} ဦးထံ စာစတင်ပို့နေပါသည်...`);
+
+            for (const user of users) {
+                try {
+                    await this.bot.sendMessage(user.user_id, broadcastText);
+                    sentCount++;
+                    await new Promise(r => setTimeout(r, 60)); // Telegram flood control
+                } catch (e) {
+                    failCount++;
+                }
+            }
+
+            await this.bot.editMessageText(
+                `✅ **Broadcast ပို့ဆောင်ပြီးပါပြီ**\n\n- အောင်မြင်: ${sentCount} ဦး\n- မအောင်မြင် (Bot ပိတ်ထားသူများ): ${failCount} ဦး`,
+                { chat_id: chatId, message_id: notifyMsg.message_id, parse_mode: 'Markdown' }
+            );
+        } catch (error) {
+            await this.bot.sendMessage(chatId, "Broadcast ပို့ရာတွင် error ဖြစ်ပေါ်ခဲ့ပါသည်။");
+        }
     }
 }
 
@@ -2382,3 +2411,5 @@ process.on('SIGINT', () => {
     console.log('Bot shutting down...');
     process.exit();
 });
+
+```
