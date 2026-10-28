@@ -1,16 +1,4 @@
-တောင်းဆိုထားသည့် အချက် ၃ ချက်လုံးကို ပြင်ဆင်ပြီးဖြစ်ပါသည်-
 
-1. **'6 Lottery' နေရာအားလုံးတွင် 'Shwe Lottery' သို့ အစားထိုးခြင်း**
-2. **Crease Mode တွင် `normal` / `none` အစား `loss` (Loss Crease) ကို default အဖြစ် သတ်မှတ်ခြင်း** (Database default, `getUserSetting` fallback နှင့် `updateBetSequence` တွင်ပါ default အနေဖြင့် Loss Crease အလုပ်လုပ်စေရန် ပြင်ဆင်ထားပါသည်)
-
-
-3. **Bot Info တွင် လက်ရှိ Crease Mode (`Loss Crease` သို့မဟုတ် `Win Crease`) ကို သေချာတိကျစွာ ဖော်ပြပေးခြင်း**
-
-
-
-ပြင်ဆင်ပြီးသား **`index.js`** (သို့မဟုတ် `index3.js`) ကုဒ်အပြည့်အစုံ ဖြစ်ပါသည်-
-
-```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const sqlite3 = require('sqlite3').verbose();
 const axios = require('axios');
@@ -2278,5 +2266,3 @@ process.on('SIGINT', () => {
     console.log('Bot shutting down...');
     process.exit();
 });
-
-```
