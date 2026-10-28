@@ -436,9 +436,11 @@ class LotteryAPI {
         try {
             console.log(`ATTEMPTING TO PLACE BET - GAME: ${this.gameType}, AMOUNT: ${amount}, BETTYPE: ${betType}`);
 
-            if (amount < 100) {
-                amount = 100;
+            // အနည်းဆုံး 10ks သို့ ပြောင်းထားပါသည်
+            if (amount < 10) {
+                amount = 10;
             }
+           
 
             let issueId = "";
             let retryCount = 0;
@@ -885,7 +887,7 @@ class AutoLotteryBot {
             const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const statusText = creaseMode === 'win' ? "Win Crease" : "Loss Crease";
             
-            const menuText = `Choose Select Crease (Current: ${statusText}):`;
+            const menuText = `Choose Select Crease:`;
             
             await this.bot.sendMessage(chatId, menuText, {
                 reply_markup: this.getCreaseModeKeyboard()
@@ -920,7 +922,7 @@ class AutoLotteryBot {
                 await this.clearFormulaPatterns(userId);
             }
             const statusText = enabled ? "✅ Enabled" : "❌ Disabled";
-            const message = `Follow Inverse Mode: ${statusText}\n\n${enabled ? 'Bot will bet the opposite of the last result' : 'Follow Inverse is disabled'}`;
+            const message = `Follow Inverse Mode: ${statusText}\n\n${enabled ? ' ' : ' '}`;
             await this.bot.sendMessage(chatId, message);
         } catch (error) {
             await this.bot.sendMessage(chatId, "Error setting follow inverse mode. Please try again.");
@@ -1856,12 +1858,12 @@ Please follow these steps:
     async getCurrentBetAmount(userId) {
         try {
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
+            const betSequence = await this.getUserSetting(userId, 'bet_sequence', '10,30,70,160,320,760,1600,3200');
             const amounts = betSequence.split(',').map(x => parseInt(x.trim()));
             const actualIndex = currentIndex >= amounts.length ? 0 : currentIndex;
-            return amounts[actualIndex] || 100;
+            return amounts[actualIndex] || 10;
         } catch (error) {
-            return 100;
+            return 10;
         }
     }
 
@@ -2098,8 +2100,7 @@ Please follow these steps:
                 }
             });
 
-            const settingsText = `Current Settings:
-Platform: Shwe Lottery
+            const settingsText = `•Bot Settings:
 Betting Mode: ${modeText}
 Crease Mode: ${creaseModeText}
 Bet Sequence: ${formattedSequence}
@@ -2199,7 +2200,7 @@ Choose your betting mode:`;
                 }[randomMode] || "Random Bot";
             }
 
-            const botInfoText = `🤖 SHWE LOTTERY BOT INFORMATION
+            const botInfoText = `
 
 • User Information:
 Platform: Shwe Lottery
@@ -2263,16 +2264,17 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
     }
 
     async handleSetBetSequence(chatId, userId, text) {
-        const amounts = text.trim().split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x) && x >= 100);
+        // အနည်းဆုံး 10ks သတ်မှတ်ထားပါသည်
+        const amounts = text.trim().split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x) && x >= 10);
         if (amounts.length === 0) {
-            await this.bot.sendMessage(chatId, "Invalid sequence! Enter numbers >= 100 separated by comma.");
+            await this.bot.sendMessage(chatId, "Invalid sequence! Enter numbers >= 10 separated by comma.\nဥပမာ - 10,30,70,150");
             return;
         }
 
         const newSeq = amounts.join(',');
         await this.saveUserSetting(userId, 'bet_sequence', newSeq);
         await this.saveUserSetting(userId, 'current_bet_index', 0);
-        await this.bot.sendMessage(chatId, `✅ Bet Sequence Updated: ${newSeq}`);
+        await this.bot.sendMessage(chatId, `✅ Bet Sequence Updated: ${newSeq}\nCurrent Bet: ${amounts[0].toLocaleString()} K (Step 1)`);
         this.ensureUserSession(userId).step = 'main';
     }
 
