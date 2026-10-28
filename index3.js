@@ -1,3 +1,14 @@
+const TelegramBot = require('node-telegram-bot-api');
+const sqlite3 = require('sqlite3').verbose();
+const axios = require('axios');
+const crypto = require('crypto');
+// BOT CONFIGURATION
+const BOT_TOKEN = "9137739367:AAE4yIYBG956-a2vJkjJBoixJn0FjP5ca2M";
+const CHANNEL_USERNAME = "@KillerbossCrackerChannel";
+const CHANNEL_LINK = "https://t.me/KillerbossCrackerChannel";
+const ADMIN_USER_ID = "8370471165";
+...
+
 // BOT CONFIGURATION
 const BOT_TOKEN = "9137739367:AAE4yIYBG956-a2vJkjJBoixJn0FjP5ca2M";
 const CHANNEL_USERNAME = "@KillerbossCrackerChannel";
