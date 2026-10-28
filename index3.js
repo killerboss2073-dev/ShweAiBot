@@ -2023,24 +2023,102 @@ Please follow these steps:
     async showBotSettings(chatId, userId) {
         try {
             const userSession = this.ensureUserSession(userId);
+            const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
             const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
-            const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
+            const followInverse = await this.getUserSetting(userId, 'follow_inverse', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
 
+            const patternsData = await this.getFormulaPatterns(userId);
+            const bsPattern = patternsData.bs_pattern || "Not set";
+            const colourPattern = patternsData.colour_pattern || "Not set";
+
+            const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
+            const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
+            const botSession = await this.getBotSession(userId);
+
+            // Crease mode
+            const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const creaseModeText = creaseMode === 'win' ? "Win Crease" : "Loss Crease";
+
+            let modeText;
+            let formulaStatus = "";
+
+            if (followInverse) {
+                modeText = "Follow Inverse";
+                formulaStatus = "\nFollow Inverse: ACTIVE";
+            } else {
+                switch(randomMode) {
+                    case 'big':
+                        modeText = "Random BIG Only";
+                        break;
+                    case 'small':
+                        modeText = "Random SMALL Only";
+                        break;
+                    case 'bot':
+                        modeText = "Random Bot";
+                        break;
+                    case 'follow':
+                        modeText = "Follow Bot";
+                        break;
+                    case 'bs_formula':
+                        modeText = "BS Formula";
+                        formulaStatus += `\nBS Formula: ACTIVE (${bsPattern})`;
+                        break;
+                    case 'colour_formula':
+                        modeText = "Colour Formula";
+                        formulaStatus += `\nColour Formula: ACTIVE (${colourPattern})`;
+                        break;
+                    default:
+                        modeText = "Random Bot";
+                }
+            }
+
+            if (bsPattern && bsPattern !== "Not set" && randomMode !== 'bs_formula' && !followInverse) {
+                formulaStatus += `\nBS Formula: INACTIVE (${bsPattern})`;
+            }
+            if (colourPattern && colourPattern !== "Not set" && randomMode !== 'colour_formula' && !followInverse) {
+                formulaStatus += `\nColour Formula: INACTIVE (${colourPattern})`;
+            }
+
+            const amounts = betSequence.split(',').map(x => {
+                const num = parseInt(x.trim());
+                return isNaN(num) ? 0 : num;
+            });
+
+            let formattedSequence = "";
+            amounts.forEach((amount, index) => {
+                if (index === currentIndex) {
+                    formattedSequence += `[${amount.toLocaleString()}]`;
+                } else {
+                    formattedSequence += `${amount.toLocaleString()}`;
+                }
+                if (index < amounts.length - 1) {
+                    formattedSequence += " -> ";
+                }
+            });
+
             const settingsText = `Current Settings:
 Platform: Shwe Lottery
+Betting Mode: ${modeText}
 Crease Mode: ${creaseModeText}
-Bet Sequence: ${betSequence}
-Current Step: ${currentIndex + 1}
-Current Bet: ${currentAmount.toLocaleString()} K`;
+Bet Sequence: ${formattedSequence}
+Current Step: ${currentIndex + 1}/${amounts.length}
+Current Bet: ${currentAmount.toLocaleString()} K
+Bot Status: ${botSession.is_running ? 'RUNNING' : 'STOPPED'}${formulaStatus}
+
+Profit/Loss Targets:
+Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
+Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
+
+Choose your betting mode:`;
 
             await this.bot.sendMessage(chatId, settingsText, {
                 reply_markup: this.getBotSettingsKeyboard()
             });
         } catch (error) {
-            await this.bot.sendMessage(chatId, "Error loading bot settings.");
+            console.error(`Error showing bot settings:`, error);
+            await this.bot.sendMessage(chatId, "Error loading bot settings. Please try again.");
         }
     }
 
@@ -2072,45 +2150,81 @@ Current Bet: ${currentAmount.toLocaleString()} K`;
             let userInfo = {};
             let balance = 0;
             if (userSession.loggedIn && userSession.apiInstance) {
-                balance = await userSession.apiInstance.getBalance();
-                userInfo = await userSession.apiInstance.getUserInfo();
+                try {
+                    balance = await userSession.apiInstance.getBalance();
+                    userInfo = await userSession.apiInstance.getUserInfo();
+                } catch (e) {
+                    console.error("Error fetching balance/userInfo:", e.message);
+                }
             }
 
+            const user_id_display = userInfo.userId || 'N/A';
             const phone = userSession.phone ? this.maskPhoneNumber(userSession.phone) : 'Not logged in';
+            const gameType = userSession.gameType || 'WINGO_30S';
+
             const botSession = await this.getBotSession(userId);
             const betSequence = await this.getUserSetting(userId, 'bet_sequence', '100,300,700,1600,3200,7600,16000,32000');
             const currentIndex = await this.getUserSetting(userId, 'current_bet_index', 0);
             const currentAmount = await this.getCurrentBetAmount(userId);
+
+            const patternsData = await this.getFormulaPatterns(userId);
+            const bsPattern = patternsData.bs_pattern || "";
+            const colourPattern = patternsData.colour_pattern || "";
+
             const profitTarget = await this.getUserSetting(userId, 'profit_target', 0);
             const lossTarget = await this.getUserSetting(userId, 'loss_target', 0);
-
-            // Crease Mode ဖော်ပြမှု (Default အားဖြင့် Loss Crease ဖြစ်စေသည်)
+            
+            // Crease Mode: default အားဖြင့် 'loss' (Loss Crease)
             const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
             const creaseModeText = creaseMode === 'win' ? 'Win Crease' : 'Loss Crease';
+            
+            // Follow Inverse Mode
+            const followInverse = await this.getUserSetting(userId, 'follow_inverse', 0);
 
-            const botInfoText = `🤖 **SHWE LOTTERY BOT INFORMATION**
+            // Betting Mode စာသား သတ်မှတ်ခြင်း
+            let modeText = "";
+            if (followInverse) {
+                modeText = "Follow Inverse";
+            } else if (bsPattern && bsPattern !== "") {
+                modeText = `BS Formula: ${bsPattern}`;
+            } else if (colourPattern && colourPattern !== "") {
+                modeText = `Colour Formula: ${colourPattern}`;
+            } else {
+                const randomMode = await this.getUserSetting(userId, 'random_betting', 'bot');
+                modeText = {
+                    'big': "Random BIG Only",
+                    'small': "Random SMALL Only", 
+                    'bot': "Random Bot",
+                    'follow': "Follow Bot"
+                }[randomMode] || "Random Bot";
+            }
 
-• **User Information:**
+            const botInfoText = `🤖 SHWE LOTTERY BOT INFORMATION
+
+• User Information:
 Platform: Shwe Lottery
-User ID: ${userInfo.userId || 'N/A'}
+User ID: ${user_id_display}
 Phone: ${phone}
 Balance: ${balance.toLocaleString()} K
-Game Type: ${userSession.gameType || 'WINGO_30S'}
+Game Type: ${gameType}
 
-• **Bot Settings:**
+• Bot Settings:
+Betting Mode: ${modeText}
 Crease Mode: ${creaseModeText}
 Bet Sequence: ${betSequence}
 Current Bet: ${currentAmount.toLocaleString()} K (Step ${currentIndex + 1})
 Bot Status: ${botSession.is_running ? 'RUNNING 🟢' : 'STOPPED 🔴'}
 
-• **Targets:**
+• Targets:
 Profit Target: ${profitTarget > 0 ? profitTarget.toLocaleString() + ' K' : 'Disabled'}
 Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}`;
 
-            await this.bot.sendMessage(chatId, botInfoText, { parse_mode: 'Markdown' });
+            // parse_mode ကြောင့် error မတက်စေရန် parse_mode မပါဘဲ ပို့ပါသည်
+            await this.bot.sendMessage(chatId, botInfoText);
+
         } catch (error) {
             console.error("Error in showBotInfo:", error);
-            await this.bot.sendMessage(chatId, "Error loading bot information.");
+            await this.bot.sendMessage(chatId, "Error loading bot information. Please try again.");
         }
     }
 
