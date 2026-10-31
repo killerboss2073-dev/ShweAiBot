@@ -2080,12 +2080,18 @@ Choose your betting mode:`;
 
             let betsText = `Your Recent Bets (Shwe Lottery)\n\n`;
             myBets.forEach((bet, i) => {
-                const res = bet.result === "WIN" ? `WIN (+${bet.profit_loss})` : `LOSE (${bet.profit_loss})`;
-                betsText += `${i+1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${res}\n`;
+                // WIN ဆိုလျှင် WIN (+19)K ၊ LOSE ဆိုလျှင် LOSE (-10)K ပုံစံ ပြသခြင်း
+                const profitLossVal = bet.profit_loss || 0;
+                const res = bet.result === "WIN" 
+                    ? `WIN (+${profitLossVal.toLocaleString()})K` 
+                    : `LOSE (${profitLossVal.toLocaleString()})K`;
+
+                betsText += `${i + 1}. ${bet.issue} - ${bet.bet_type} - ${bet.amount.toLocaleString()}K - ${res}\n`;
             });
 
             await this.bot.sendMessage(chatId, betsText);
         } catch (error) {
+            console.error("Error showing my bets:", error);
             await this.bot.sendMessage(chatId, "Error getting bet history.");
         }
     }
