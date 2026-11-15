@@ -648,7 +648,6 @@ class AutoLotteryBot {
         this.bot.onText(/\/aid (.+)/, (msg, match) => this.handleAddGameId(msg, match));
         this.bot.onText(/\/rid (.+)/, (msg, match) => this.handleRemoveGameId(msg, match));
         this.bot.onText(/\/ids/, (msg) => this.handleListGameIds(msg));
-        this.bot.onText(/\/gats/, (msg) => this.handleGameIdStats(msg));
         this.bot.onText(/\/broadcast (.+)/, (msg, match) => this.handleBroadcastMessage(msg, match));
 
         this.bot.on('callback_query', (query) => this.handleCallbackQuery(query));
@@ -1242,6 +1241,7 @@ Please follow these steps:
         });
     }
 
+    // ✅ 24 နာရီ Trial ဖြုတ်ထားပြီး Admin မှ /aid ဖြင့် ခွင့်ပြုထားမှသာ Login ဝင်ခွင့်ပေးခြင်း
     async processLogin(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
 
@@ -1276,45 +1276,41 @@ Please follow these steps:
                 return;
             }
 
-            const now = Date.now();
-            const existingUser = await this.db.get("SELECT user_id, game_id, trial_start, trial_expire FROM users WHERE user_id = ?", [userId]);
+            // Admin ခွင့်ပြုစာရင်း (allowed_game_ids) ထဲတွင် ရှိမရှိ စစ်ဆေးခြင်း
+            const isAllowed = await this.isGameIdAllowed(gameId);
 
+            if (!isAllowed) {
+                // Admin ထံသို့ Game ID အသစ် လာရောက်စမ်းသပ်ကြောင်း အသိပေးစာ ပို့ခြင်း
+                await this.bot.sendMessage(
+                    ADMIN_USER_ID,
+                    `⚠️ **UNAPPROVED LOGIN ATTEMPT**\n\nUser ID: \`${userId}\`\nGame ID: \`${gameId}\`\nPhone: ${this.maskPhoneNumber(userSession.phone)}\nTime: ${getMyanmarTime()}\n\nခွင့်ပြုလိုပါက \`/aid ${gameId}\` ဟု ရိုက်ပို့ပါ။`,
+                    { parse_mode: 'Markdown' }
+                );
+
+                await this.bot.editMessageText(
+                    `❌ Login Failed!\n\nGame ID : ${gameId}\nStatus : NOT APPROVED\n\nသင့် Game ID ကို Admin မှ ခွင့်ပြုပေးထားခြင်း မရှိသေးပါ။\nခွင့်ပြုချက်ရယူရန် Admin ထံ ဆက်သွယ်ပါ။`,
+                    {
+                        chat_id: chatId,
+                        message_id: loadingMsg.message_id
+                    }
+                );
+                return;
+            }
+
+            // ခွင့်ပြုထားပြီးသား ဖြစ်ပါက Database တွင် သိမ်းဆည်းခြင်း
+            const existingUser = await this.db.get("SELECT user_id FROM users WHERE user_id = ?", [userId]);
             if (existingUser) {
-                await this.db.run(`UPDATE users SET phone = ?, password = ?, platform = 'SHWE', game_id = ? WHERE user_id = ?`,
+                await this.db.run(`UPDATE users SET phone = ?, password = ?, platform = 'SHWE', game_id = ?, trial_start = 0, trial_expire = 0 WHERE user_id = ?`,
                     [userSession.phone, userSession.password, gameId, userId]);
             } else {
-                await this.db.run(`INSERT INTO users (user_id, phone, password, platform, game_id) VALUES (?, ?, ?, 'SHWE', ?)`,
+                await this.db.run(`INSERT INTO users (user_id, phone, password, platform, game_id, trial_start, trial_expire) VALUES (?, ?, ?, 'SHWE', ?, 0, 0)`,
                     [userId, userSession.phone, userSession.password, gameId]);
             }
 
-            const isPremium = await this.isGameIdAllowed(gameId);
-
-            if (isPremium) {
-                await this.db.run(`UPDATE users SET trial_start = 0, trial_expire = 0 WHERE user_id = ?`, [userId]);
-                await this.bot.sendMessage(ADMIN_USER_ID, `⭐ **PREMIUM USER LOGIN**\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`);
-            } else {
-                const gameTrial = await this.db.get("SELECT user_id, trial_start, trial_expire FROM users WHERE game_id = ? AND trial_start > 0", [gameId]);
-                if (gameTrial) {
-                    if (Date.now() < gameTrial.trial_expire) {
-                        if (gameTrial.user_id != userId) {
-                            await this.bot.editMessageText(`Login Failed!\n\nGame ID: ${gameId}\nStatus: ALREADY REGISTERED WITH ANOTHER USER.`, {
-                                chat_id: chatId,
-                                message_id: loadingMsg.message_id
-                            });
-                            return;
-                        }
-                    } else {
-                        await this.bot.editMessageText(`Login Failed!\n\nGame ID: ${gameId}\nStatus: TRIAL EXPIRED. Contact Admin.`, {
-                            chat_id: chatId,
-                            message_id: loadingMsg.message_id
-                        });
-                        return;
-                    }
-                } else {
-                    await this.db.run(`UPDATE users SET trial_start = ?, trial_expire = ? WHERE user_id = ?`, [now, now + (24 * 60 * 60 * 1000), userId]);
-                    await this.bot.sendMessage(chatId, "🎁 New Game ID\n\n24 Hour Free Trial Activated!");
-                }
-            }
+            await this.bot.sendMessage(
+                ADMIN_USER_ID,
+                `⭐ **APPROVED USER LOGIN**\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`
+            );
 
             userSession.loggedIn = true;
             userSession.step = "main";
@@ -1326,7 +1322,7 @@ Please follow these steps:
             await this.saveUserSetting(userId, "game_type", gameType);
 
             const maskedPhone = this.maskPhoneNumber(userSession.phone);
-            const successText = `Shwe Lottery Login Successful!\n\nGame ID : ${gameId}\nAccount : ${maskedPhone}\nBalance : ${balance.toLocaleString()} K\nGame Type : ${gameType}\nStatus : ${isPremium ? '⭐ PREMIUM' : 'VERIFIED ✅'}`;
+            const successText = `Shwe Lottery Login Successful!\n\nGame ID : ${gameId}\nAccount : ${maskedPhone}\nBalance : ${balance.toLocaleString()} K\nGame Type : ${gameType}\nStatus : VERIFIED ✅`;
 
             await this.bot.editMessageText(successText, {
                 chat_id: chatId,
@@ -1672,18 +1668,21 @@ Please follow these steps:
         }
     }
 
+    // ✅ Trial check ဖယ်ရှားပြီး Admin ခွင့်ပြုထားသည့် Game ID ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
     async runBot(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
-        const userInfo = await userSession.apiInstance.getUserInfo();
-        const gameId = String(userInfo.userId).trim();
-        const isPremium = await this.isGameIdAllowed(gameId);
+        if (!userSession.loggedIn || !userSession.apiInstance) {
+            await this.bot.sendMessage(chatId, "Please login first!");
+            return;
+        }
 
-        if (!isPremium) {
-            const trial = await this.db.get("SELECT trial_start, trial_expire FROM users WHERE user_id = ?", [userId]);
-            if (!trial || trial.trial_start == 0 || Date.now() > trial.trial_expire) {
-                await this.bot.sendMessage(chatId, "❌ Trial Expired or Not Found. Contact Admin.");
-                return;
-            }
+        const userInfo = await userSession.apiInstance.getUserInfo();
+        const gameId = String(userInfo.userId || "").trim();
+        const isAllowed = await this.isGameIdAllowed(gameId);
+
+        if (!isAllowed) {
+            await this.bot.sendMessage(chatId, `❌ Access Denied!\n\nGame ID (${gameId}) ကို Admin မှ ခွင့်ပြုပေးထားခြင်း မရှိပါ။\nAdmin ထံ ဆက်သွယ်ပါ။`);
+            return;
         }
 
         if (autoBettingTasks[userId]) {
@@ -1713,6 +1712,18 @@ Please follow these steps:
             if (!autoBettingTasks[userId]) return;
 
             try {
+                // အလုပ်လုပ်နေစဉ်အတွင်း Admin မှ ID ပြန်ဖျက်လိုက်ပါက Bot ချက်ချင်းရပ်စေရန် စစ်ဆေးခြင်း
+                const userInfo = await userSession.apiInstance.getUserInfo();
+                const gameId = String(userInfo.userId || "").trim();
+                const isAllowed = await this.isGameIdAllowed(gameId);
+                if (!isAllowed) {
+                    await this.bot.sendMessage(userId, "❌ သင့် Game ID ကို ခွင့်ပြုစာရင်းမှ ပယ်ဖျက်လိုက်ပါသဖြင့် Bot ရပ်နားလိုက်ပါသည်။");
+                    delete autoBettingTasks[userId];
+                    delete waitingForResults[userId];
+                    await this.saveBotSession(userId, false);
+                    return;
+                }
+
                 if (waitingForResults[userId]) {
                     setTimeout(bettingLoop, 3000);
                     return;
@@ -2080,7 +2091,6 @@ Choose your betting mode:`;
 
             let betsText = `Your Recent Bets (Shwe Lottery)\n\n`;
             myBets.forEach((bet, i) => {
-                // WIN ဆိုလျှင် WIN (+19)K ၊ LOSE ဆိုလျှင် LOSE (-10)K ပုံစံ ပြသခြင်း
                 const profitLossVal = bet.profit_loss || 0;
                 const res = bet.result === "WIN" 
                     ? `WIN (+${profitLossVal.toLocaleString()})K` 
@@ -2260,7 +2270,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
             await this.db.run('INSERT OR REPLACE INTO allowed_game_ids (game_id) VALUES (?)', [gameId]);
             await this.db.run('UPDATE users SET trial_start = 0, trial_expire = 0 WHERE game_id = ?', [gameId]);
         }
-        await this.bot.sendMessage(chatId, `Added Game IDs: ${gameIds.join(', ')}`);
+        await this.bot.sendMessage(chatId, `✅ Added Game IDs: ${gameIds.join(', ')}`);
     }
 
     async handleRemoveGameId(msg, match) {
@@ -2270,7 +2280,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
 
         await this.db.run('DELETE FROM allowed_game_ids WHERE game_id = ?', [gameId]);
         await this.db.run('UPDATE users SET trial_expire = 0 WHERE game_id = ?', [gameId]);
-        await this.bot.sendMessage(chatId, `Removed Game ID: ${gameId}`);
+        await this.bot.sendMessage(chatId, `🗑 Removed Game ID: ${gameId}`);
     }
 
     async handleListGameIds(msg) {
@@ -2282,86 +2292,6 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
         await this.bot.sendMessage(chatId, `Allowed Game IDs:\n\n${list || 'None'}`);
     }
 
-    // ✅ /gats command: Premium နှင့် Member/Trial သမားများ၊ သက်တမ်းကုန်မည့် Date & Time ပြသပေးခြင်း
-    async handleGameIdStats(msg) {
-        const chatId = msg.chat.id;
-        if (String(chatId) !== ADMIN_USER_ID) return;
-
-        try {
-            const users = await this.db.all(`
-                SELECT 
-                    u.user_id,
-                    u.phone,
-                    u.game_id,
-                    u.trial_start,
-                    u.trial_expire,
-                    CASE 
-                        WHEN a.game_id IS NOT NULL THEN 'PREMIUM'
-                        WHEN u.trial_start > 0 AND u.trial_expire > strftime('%s', 'now') * 1000 THEN 'MEMBER (TRIAL ACTIVE)'
-                        WHEN u.trial_start > 0 AND u.trial_expire <= strftime('%s', 'now') * 1000 THEN 'EXPIRED'
-                        ELSE 'REGISTERED'
-                    END as role
-                FROM users u
-                LEFT JOIN allowed_game_ids a ON u.game_id = a.game_id
-                ORDER BY u.created_at DESC
-            `);
-
-            if (!users || users.length === 0) {
-                await this.bot.sendMessage(chatId, "အသုံးပြုသူ စာရင်း မရှိသေးပါ။");
-                return;
-            }
-
-            let report = "📊 **SHWE LOTTERY USER & MEMBERSHIP STATS**\n\n";
-            let premiumCount = 0;
-            let memberCount = 0;
-            let expiredCount = 0;
-
-            users.forEach((u, i) => {
-                let statusEmoji = "⚪";
-                let expireDateStr = "No Expiry (Lifetime)";
-
-                if (u.role === 'PREMIUM') {
-                    statusEmoji = "⭐";
-                    expireDateStr = "Lifetime Access (No Expiry)";
-                    premiumCount++;
-                } else if (u.role === 'MEMBER (TRIAL ACTIVE)') {
-                    statusEmoji = "🟢";
-                    expireDateStr = getMyanmarTime(u.trial_expire);
-                    memberCount++;
-                } else if (u.role === 'EXPIRED') {
-                    statusEmoji = "🔴";
-                    expireDateStr = `Expired at: ${getMyanmarTime(u.trial_expire)}`;
-                    expiredCount++;
-                }
-
-                report += `${i + 1}. ${statusEmoji} **${u.role}**\n`;
-                report += `   👤 Telegram ID: \`${u.user_id}\`\n`;
-                report += `   🎮 Game ID: ${u.game_id || 'Not logged in'}\n`;
-                report += `   📱 Phone: ${this.maskPhoneNumber(u.phone)}\n`;
-                report += `   ⏳ Expire Date: ${expireDateStr}\n\n`;
-            });
-
-            report += `📊 **Summary:**\n`;
-            report += `⭐ Premium အသုံးပြုသူ: ${premiumCount}\n`;
-            report += `🟢 Member (Trial) အသုံးပြုသူ: ${memberCount}\n`;
-            report += `🔴 သက်တမ်းကုန်ဆုံးသူ: ${expiredCount}\n`;
-            report += `👥 စုစုပေါင်း User: ${users.length}\n`;
-
-            if (report.length > 4000) {
-                const parts = report.match(/[\s\S]{1,4000}/g) || [];
-                for (const part of parts) {
-                    await this.bot.sendMessage(chatId, part, { parse_mode: 'Markdown' });
-                }
-            } else {
-                await this.bot.sendMessage(chatId, report, { parse_mode: 'Markdown' });
-            }
-        } catch (error) {
-            console.error("Error in handleGameIdStats:", error);
-            await this.bot.sendMessage(chatId, "Error loading statistics.");
-        }
-    }
-
-    // ✅ /broadcast command: /start နှိပ်ထားသော User အားလုံးထံ စာပို့ခြင်း
     async handleBroadcastMessage(msg, match) {
         const chatId = msg.chat.id;
         if (String(chatId) !== ADMIN_USER_ID) return;
@@ -2388,7 +2318,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
                 try {
                     await this.bot.sendMessage(user.user_id, broadcastText);
                     sentCount++;
-                    await new Promise(r => setTimeout(r, 60)); // Telegram flood control
+                    await new Promise(r => setTimeout(r, 60));
                 } catch (e) {
                     failCount++;
                 }
@@ -2406,6 +2336,7 @@ Loss Target: ${lossTarget > 0 ? lossTarget.toLocaleString() + ' K' : 'Disabled'}
 
 console.log("Shwe Lottery Auto Bot starting...");
 console.log("Platform: Shwe Lottery ONLY");
+console.log("Approval Mode: Admin Whitelist Only (/aid)");
 console.log("Default Crease Mode: Loss Crease");
 console.log("Admin User ID: " + ADMIN_USER_ID);
 
