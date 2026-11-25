@@ -1619,7 +1619,7 @@ Please follow these steps:
             const chatId = userId;
             let message = betResult === "WIN" ? 
                 `🚀 BET RESULT - WIN! \n\n🏆TOTAL PROFIT: ${totalProfit.toLocaleString()} K` :
-                `🚀 BET RESULT - LOSS!\n\nTOTAL PROFIT: ${totalProfit.toLocaleString()} K`;
+                `🚀 BET RESULT - LOSS!\n\n💔TOTAL PROFIT: ${totalProfit.toLocaleString()} K`;
 
             await this.bot.sendMessage(chatId, message);
         } catch (error) {
@@ -1700,7 +1700,7 @@ Please follow these steps:
         const creaseMode = await this.getUserSetting(userId, 'crease_mode', 'loss');
         const creaseModeText = creaseMode === 'win' ? 'Win Crease' : 'Loss Crease';
 
-        await this.bot.sendMessage(chatId, `🚀 Auto Bot Started!\nGame Type: ${userSession.gameType}\nCrease Mode: ${creaseModeText}`);
+        await this.bot.sendMessage(chatId, `🚀 Auto Bot Started!`);
         this.startAutoBetting(userId);
     }
 
