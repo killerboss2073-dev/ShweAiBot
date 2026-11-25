@@ -1242,6 +1242,7 @@ Please follow these steps:
     }
 
     // ✅ 24 နာရီ Trial ဖြုတ်ထားပြီး Admin မှ /aid ဖြင့် ခွင့်ပြုထားမှသာ Login ဝင်ခွင့်ပေးခြင်း
+    // ✅ Admin ခွင့်ပြုထားမှသာ Login ဝင်ခွင့်ပေးခြင်း (Error 403 ကာကွယ်ပြီး)
     async processLogin(chatId, userId) {
         const userSession = this.ensureUserSession(userId);
 
@@ -1280,12 +1281,11 @@ Please follow these steps:
             const isAllowed = await this.isGameIdAllowed(gameId);
 
             if (!isAllowed) {
-                // Admin ထံသို့ Game ID အသစ် လာရောက်စမ်းသပ်ကြောင်း အသိပေးစာ ပို့ခြင်း
+                // Admin ဆီ စာပို့မရရင်တောင် Bot crash မဖြစ်အောင် .catch() ထည့်ထားပါသည်
                 await this.bot.sendMessage(
                     ADMIN_USER_ID,
-                    `⚠️ **UNAPPROVED LOGIN ATTEMPT**\n\nUser ID: \`${userId}\`\nGame ID: \`${gameId}\`\nPhone: ${this.maskPhoneNumber(userSession.phone)}\nTime: ${getMyanmarTime()}\n\nခွင့်ပြုလိုပါက \`/aid ${gameId}\` ဟု ရိုက်ပို့ပါ။`,
-                    { parse_mode: 'Markdown' }
-                );
+                    `⚠️ UNAPPROVED LOGIN ATTEMPT\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPhone: ${this.maskPhoneNumber(userSession.phone)}\nTime: ${getMyanmarTime()}\n\nခွင့်ပြုလိုပါက /aid ${gameId} ဟု ရိုက်ပို့ပါ။`
+                ).catch(err => console.log("Admin message skipped:", err.message));
 
                 await this.bot.editMessageText(
                     `❌ Login Failed!\n\nGame ID : ${gameId}\nStatus : NOT APPROVED\n\nသင့် Game ID ကို Admin မှ ခွင့်ပြုပေးထားခြင်း မရှိသေးပါ။\nခွင့်ပြုချက်ရယူရန် Admin ထံ ဆက်သွယ်ပါ။`,
@@ -1307,10 +1307,11 @@ Please follow these steps:
                     [userId, userSession.phone, userSession.password, gameId]);
             }
 
+            // Admin ဆီ အသိပေးစာ (Error မတက်စေရန် .catch() ထည့်ထားပါသည်)
             await this.bot.sendMessage(
                 ADMIN_USER_ID,
-                `⭐ **APPROVED USER LOGIN**\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`
-            );
+                `⭐ APPROVED USER LOGIN\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`
+            ).catch(err => console.log("Admin message skipped:", err.message));
 
             userSession.loggedIn = true;
             userSession.step = "main";
@@ -1337,7 +1338,7 @@ Please follow these steps:
             await this.bot.editMessageText(`Login Error!\n\n${error.message}`, {
                 chat_id: chatId,
                 message_id: loadingMsg.message_id
-            });
+            }).catch(() => {});
         }
     }
 
