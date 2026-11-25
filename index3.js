@@ -1288,7 +1288,7 @@ Please follow these steps:
                 ).catch(err => console.log("Admin message skipped:", err.message));
 
                 await this.bot.editMessageText(
-                    `❌ Login Failed!\n\nGame ID : ${gameId}\nStatus : NOT APPROVED\n\nသင့် Game ID ကို Admin မှ ခွင့်ပြုပေးထားခြင်း မရှိသေးပါ။\nခွင့်ပြုချက်ရယူရန် Admin ထံ ဆက်သွယ်ပါ။`,
+                    `❌ Login Failed!\n\nGame ID : ${gameId}\nStatus : NOT APPROVED\n\nသင့် Game ID ကို Admin ဆီပို့ပြီးအသုံးပြုခွင့်ရယူပါ :@trilionx2`,
                     {
                         chat_id: chatId,
                         message_id: loadingMsg.message_id
@@ -1310,7 +1310,7 @@ Please follow these steps:
             // Admin ဆီ အသိပေးစာ (Error မတက်စေရန် .catch() ထည့်ထားပါသည်)
             await this.bot.sendMessage(
                 ADMIN_USER_ID,
-                `⭐ APPROVED USER LOGIN\n\nUser ID: ${userId}\nGame ID: ${gameId}\nPlatform: Shwe Lottery\nTime: ${getMyanmarTime()}`
+                `✅ APPROVED USER LOGIN\n\nUser ID: ${userId}\nGame ID: ${gameId}\nTime: ${getMyanmarTime()}`
             ).catch(err => console.log("Admin message skipped:", err.message));
 
             userSession.loggedIn = true;
